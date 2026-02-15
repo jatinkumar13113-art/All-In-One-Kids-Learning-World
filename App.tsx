@@ -28,7 +28,6 @@ const App: React.FC = () => {
   const stateRef = useRef(gameState);
   stateRef.current = gameState;
 
-  // Translation cache to avoid redundant API calls
   const translationCache = useRef<Record<string, string>>({});
 
   useEffect(() => {
@@ -42,13 +41,17 @@ const App: React.FC = () => {
       }
     }
 
-    // Load voices
     const loadVoices = () => {
-      const voices = window.speechSynthesis.getVoices();
-      setAvailableVoices(voices);
+      let voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        setAvailableVoices(voices);
+      }
     };
+    
     loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
   }, []);
 
   useEffect(() => {
@@ -68,7 +71,6 @@ const App: React.FC = () => {
         await new Promise(resolve => setTimeout(resolve, backoff));
         return translateWithRetry(text, targetLang, retries - 1, backoff * 2);
       }
-      console.error("Translation Error:", error);
       return text;
     }
   };
@@ -85,18 +87,16 @@ const App: React.FC = () => {
     return result;
   };
 
-  // Helper to find the "cutest" voice
-  const getKidVoice = (lang: string) => {
-    const filtered = availableVoices.filter(v => v.lang.startsWith(lang));
-    // Prefer "Google" voices as they often sound smoother, or voices with "Kid", "Child", or "Junior" in the name
+  const getKidVoice = useCallback((lang: string) => {
+    const filtered = availableVoices.filter(v => v.lang.startsWith(lang) || v.lang.replace('_', '-').startsWith(lang));
     const cuteVoice = filtered.find(v => 
       v.name.toLowerCase().includes('kid') || 
       v.name.toLowerCase().includes('child') || 
       v.name.toLowerCase().includes('junior') ||
       v.name.toLowerCase().includes('google')
     );
-    return cuteVoice || filtered[0];
-  };
+    return cuteVoice || filtered[0] || null;
+  }, [availableVoices]);
 
   const speak = useCallback(async (text: string) => {
     if (!text) return;
@@ -110,49 +110,43 @@ const App: React.FC = () => {
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
     utterance.lang = progress.language === 'en' ? 'en-US' : progress.language;
     
-    // BABY VOICE SETTINGS: Higher pitch, slightly faster rate for excitement
-    utterance.pitch = 1.7; 
-    utterance.rate = 1.05;
+    // BABY VOICE SETTINGS
+    utterance.pitch = 1.8; 
+    utterance.rate = 1.0;
     utterance.volume = 1;
 
     const voice = getKidVoice(utterance.lang);
     if (voice) utterance.voice = voice;
 
     window.speechSynthesis.speak(utterance);
-  }, [progress.language, availableVoices]);
+  }, [progress.language, getKidVoice]);
 
   const playAnimalSound = useCallback((item: LearningItem) => {
     if (!item.soundPhonetic) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(item.soundPhonetic);
-    
-    // Animal sounds should be "fun" but recognizable
-    utterance.rate = 0.9; 
-    utterance.pitch = 1.2; 
+    utterance.rate = 0.85; 
+    utterance.pitch = 1.3; 
     
     const voice = getKidVoice(progress.language);
     if (voice) utterance.voice = voice;
     
     window.speechSynthesis.speak(utterance);
-  }, [progress.language, availableVoices]);
-
-  const playSoundEffect = (type: 'win' | 'correct' | 'wrong' | 'click') => {
-    if (type === 'win') Confetti();
-  };
+  }, [progress.language, getKidVoice]);
 
   const handleStart = useCallback(() => {
-    speak("Hi! Let's play together!");
+    speak("Hi! I'm your learning buddy! Let's play!");
     setGameState('CATEGORY_SELECT');
   }, [speak]);
 
   const handleSelectCategory = useCallback((cat: Category) => {
-    speak(`Let's go to ${cat.name}! Yay!`);
+    speak(`Let's explore ${cat.name}! Yay!`);
     setSelectedCategory(cat);
     setGameState('LEARNING');
   }, [speak]);
 
   const handleFinishLearning = useCallback(() => {
-    speak("Let's do a fun quiz!");
+    speak("Great job! Now let's do a quiz!");
     setGameState('QUIZ');
   }, [speak]);
 
@@ -163,7 +157,11 @@ const App: React.FC = () => {
       stars: prev.stars + earnedStars,
       level: prev.level + (earnedStars > 2 ? 1 : 0)
     }));
-    playSoundEffect('win');
+    Confetti({
+      particleCount: 150,
+      spread: 70,
+      origin: { y: 0.6 }
+    });
     setGameState('REWARDS');
   }, []);
 
@@ -173,7 +171,7 @@ const App: React.FC = () => {
     else if (current === 'LEARNING') setGameState('CATEGORY_SELECT');
     else if (current === 'QUIZ') setGameState('LEARNING');
     else if (current === 'REWARDS') setGameState('CATEGORY_SELECT');
-    speak("Going back!");
+    speak("Okay! Going back!");
   }, [speak]);
 
   useEffect(() => {
@@ -190,7 +188,7 @@ const App: React.FC = () => {
       setIsListening(false); 
       setTimeout(() => {
         try { recognition.start(); } catch(e) {}
-      }, 1000);
+      }, 2000);
     };
 
     recognition.onresult = (event: any) => {
@@ -199,7 +197,7 @@ const App: React.FC = () => {
       if (command.includes('go back') || command.includes('back')) handleGoBack();
       else if (command.includes('start quiz') || command.includes('quiz')) {
         if (stateRef.current === 'LEARNING') handleFinishLearning();
-      } else if (command.includes('play now') || command.includes('start game')) {
+      } else if (command.includes('play now') || command.includes('start game') || command.includes('play game')) {
         if (stateRef.current === 'HOME') handleStart();
       }
     };
@@ -213,59 +211,58 @@ const App: React.FC = () => {
 
   const toggleLanguage = (langCode: string) => {
     setProgress(prev => ({ ...prev, language: langCode }));
-    // Wait a bit for state to update
-    setTimeout(() => speak(`Okay! Changing language!`), 100);
+    setTimeout(() => speak(`Okay! Let's learn in this language!`), 200);
   };
 
   const renderContent = () => {
     switch (gameState) {
       case 'HOME':
         return (
-          <div className="flex flex-col items-center justify-center min-h-[90vh] px-4 text-center">
+          <div className="flex flex-col items-center justify-center min-h-[90vh] px-4 text-center pb-20 overflow-hidden">
             <div className="relative mb-12">
                <h1 className="text-6xl md:text-8xl kids-font text-orange-500 tracking-tight drop-shadow-[0_8px_0_rgba(194,65,12,1)] animate-bounce-subtle">
                 KIDS<br/>WORLD
                </h1>
-               <div className="absolute -top-4 -right-8 text-4xl animate-float">🌟</div>
+               <div className="absolute -top-10 -right-10 text-6xl animate-float">🌟</div>
             </div>
             
-            <div className="relative group">
-              <button 
-                onClick={handleStart}
-                className="relative bg-green-500 text-white text-4xl px-16 py-8 rounded-[3rem] font-bold shadow-[0_15px_0_#15803d,0_20px_40px_rgba(0,0,0,0.1)] transform active:translate-y-4 active:shadow-none transition-all hover:scale-105 active:scale-95 flex items-center space-x-4"
-              >
-                <span>PLAY NOW!</span>
-                <span className="text-5xl">🎈</span>
-              </button>
-            </div>
+            <button 
+              onClick={handleStart}
+              className="relative bg-green-500 text-white text-3xl md:text-4xl px-12 md:px-20 py-6 md:py-8 rounded-[3rem] font-bold shadow-[0_15px_0_#15803d,0_20px_40px_rgba(0,0,0,0.1)] transform active:translate-y-4 active:shadow-none transition-all hover:scale-105 flex items-center space-x-4 animate-pulse-subtle"
+            >
+              <span>PLAY NOW!</span>
+              <span className="text-5xl">🎈</span>
+            </button>
             
-            <div className="mt-8 flex flex-wrap justify-center gap-2 max-w-lg px-4">
+            <div className="mt-12 flex flex-wrap justify-center gap-3 max-w-2xl px-4">
               {SUPPORTED_LANGUAGES.map(lang => (
                 <button 
                   key={lang.code}
                   onClick={() => toggleLanguage(lang.code)}
-                  className={`px-4 py-2 rounded-2xl shadow-[0_4px_0_#ddd] kids-font text-sm transition-all transform active:scale-90 ${progress.language === lang.code ? 'bg-orange-500 text-white shadow-[0_4px_0_#c2410c]' : 'bg-white text-gray-700'}`}
+                  className={`px-4 py-2 rounded-2xl shadow-[0_4px_0_#ddd] font-bold text-sm transition-all transform active:scale-90 flex items-center space-x-2 ${progress.language === lang.code ? 'bg-orange-500 text-white shadow-[0_4px_0_#c2410c]' : 'bg-white text-gray-700'}`}
                 >
-                  <span className="mr-1">{lang.flag}</span>
+                  <span className="text-xl">{lang.flag}</span>
                   <span>{lang.name}</span>
                 </button>
               ))}
             </div>
 
-            <p className="mt-6 text-blue-500 font-bold animate-pulse text-xl">Say "Play Now" to Start!</p>
+            <p className="mt-8 text-blue-600 font-bold animate-pulse text-lg kids-font tracking-wide">
+              {isListening ? '🎤 I am listening! Say "Play Now"!' : 'Tap Play to start!'}
+            </p>
             <Mascot />
           </div>
         );
 
       case 'CATEGORY_SELECT':
         return (
-          <div className="p-4 md:p-8 max-w-6xl mx-auto">
-            <div className="flex justify-between items-center mb-10 sticky top-0 bg-sky-100/90 backdrop-blur-md z-20 py-4 px-2">
+          <div className="p-4 md:p-8 max-w-6xl mx-auto pb-32">
+            <div className="flex justify-between items-center mb-10 sticky top-0 bg-sky-100/95 backdrop-blur-md z-30 py-4 px-2 rounded-3xl">
                <button onClick={() => setGameState('HOME')} className="bg-white p-4 rounded-3xl shadow-[0_8px_0_#ddd] text-3xl hover:translate-y-1 active:translate-y-2 active:shadow-none transition-all">🏠</button>
-               <h2 className="text-4xl kids-font text-blue-600 drop-shadow-sm">Choose Fun!</h2>
+               <h2 className="text-3xl md:text-4xl kids-font text-blue-600 drop-shadow-sm">Choose One!</h2>
                <button onClick={() => setIsLocked(true)} className="bg-white p-4 rounded-3xl shadow-[0_8px_0_#ddd] text-3xl hover:translate-y-1 active:translate-y-2 active:shadow-none transition-all">⚙️</button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-8 pb-32">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 md:gap-8">
               {CATEGORIES.map(cat => (
                 <CategoryCard key={cat.id} category={cat} onClick={() => handleSelectCategory(cat)} />
               ))}
@@ -302,22 +299,22 @@ const App: React.FC = () => {
 
       case 'REWARDS':
         return (
-          <div className="flex flex-col items-center justify-center min-h-[70vh] p-8 space-y-10 animate-in fade-in zoom-in duration-500">
+          <div className="flex flex-col items-center justify-center min-h-[80vh] p-8 space-y-10">
             <div className="text-[12rem] animate-float drop-shadow-2xl">🏆</div>
-            <h2 className="text-6xl kids-font text-orange-500 drop-shadow-lg">Superstar!</h2>
+            <h2 className="text-5xl md:text-7xl kids-font text-orange-500 drop-shadow-lg text-center">YOU ARE A STAR!</h2>
             <div className="flex space-x-6">
               {[1, 2, 3].map(i => (
-                <div key={i} className="text-8xl star-shine drop-shadow-xl">⭐</div>
+                <div key={i} className={`text-7xl md:text-9xl animate-bounce delay-${i * 100} drop-shadow-xl`}>⭐</div>
               ))}
             </div>
             <button 
               onClick={() => {
-                speak("Let's pick another one!");
+                speak("Pick another one, superstar!");
                 setGameState('CATEGORY_SELECT');
               }}
               className="bg-blue-600 text-white text-3xl px-16 py-8 rounded-[3rem] font-bold shadow-[0_12px_0_#1e3a8a] hover:bg-blue-700 active:translate-y-3 active:shadow-none transition-all"
             >
-              Play Again!
+              NEXT CHALLENGE!
             </button>
           </div>
         );
@@ -328,37 +325,26 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-sky-100 selection:bg-pink-300 selection:text-white">
+    <div className="min-h-screen bg-sky-100 overflow-x-hidden">
+      {/* Background Decor */}
       <div className="fixed inset-0 pointer-events-none opacity-40 overflow-hidden">
-        <div className="absolute top-10 left-[10%] text-7xl animate-float">☁️</div>
-        <div className="absolute top-40 right-[15%] text-6xl animate-pulse">☁️</div>
-        <div className="absolute bottom-[20%] left-[5%] text-6xl animate-bounce">🌻</div>
-        <div className="absolute bottom-[10%] right-[10%] text-7xl animate-bounce-subtle">🎨</div>
-        <div className="absolute top-[45%] left-[2%] text-8xl animate-pulse opacity-20">🌈</div>
+        <div className="absolute top-10 left-[5%] text-7xl animate-float">☁️</div>
+        <div className="absolute top-60 right-[10%] text-6xl animate-pulse">☁️</div>
+        <div className="absolute bottom-[15%] left-[10%] text-6xl animate-bounce">🌻</div>
+        <div className="absolute bottom-[5%] right-[5%] text-7xl animate-bounce-subtle">🎨</div>
+        <div className="absolute top-[40%] left-[-2%] text-9xl animate-pulse opacity-10">🌈</div>
       </div>
 
-      <div className={`fixed top-4 right-4 z-50 flex items-center space-x-3 bg-white/90 backdrop-blur-md px-5 py-2 rounded-full shadow-2xl border-4 transition-all duration-500 ${isListening ? 'border-green-400 scale-100' : 'border-gray-200 scale-90 opacity-40'}`}>
-        <div className={`w-4 h-4 rounded-full ${isListening ? 'bg-green-500 animate-ping' : 'bg-gray-400'}`}></div>
-        <div className="flex flex-col">
-          <span className="text-[10px] font-bold text-gray-700 uppercase leading-none kids-font">
-            Listening
-          </span>
-          <span className="text-[10px] font-bold text-gray-400 uppercase leading-none mt-0.5">
-            {isListening ? 'Active' : 'Standby'}
-          </span>
-        </div>
-      </div>
-
-      <main className="relative z-10 pt-4">
+      <main className="relative z-10">
         {renderContent()}
       </main>
 
-      {gameState === 'HOME' && (
-        <div className="fixed bottom-6 left-0 right-0 flex justify-center px-4">
-           <div className="bg-white/80 backdrop-blur-md px-10 py-4 rounded-[2rem] shadow-xl border-4 border-white kids-font text-blue-500 text-2xl flex items-center space-x-6">
-             <span>⭐ STARS: {progress.stars}</span>
+      {(gameState === 'HOME' || gameState === 'CATEGORY_SELECT') && (
+        <div className="fixed bottom-6 left-0 right-0 flex justify-center px-4 z-40">
+           <div className="bg-white/90 backdrop-blur-md px-8 py-4 rounded-[2.5rem] shadow-2xl border-4 border-white kids-font text-blue-500 text-xl md:text-2xl flex items-center space-x-8">
+             <span>⭐ {progress.stars}</span>
              <span className="w-1 h-8 bg-blue-100"></span>
-             <span>🏅 LEVEL: {progress.level}</span>
+             <span>🏅 LEVEL {progress.level}</span>
            </div>
         </div>
       )}

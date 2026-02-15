@@ -50,7 +50,6 @@ const QuizView: React.FC<Props> = ({ category, onComplete, onBack, speak, voiceC
       setLocalTranslatedName(translated);
       lastTranslatedText.current = text;
     } catch (e) {
-      console.error(e);
       setLocalTranslatedName(text);
     } finally {
       setIsLocalTranslating(false);
@@ -62,19 +61,12 @@ const QuizView: React.FC<Props> = ({ category, onComplete, onBack, speak, voiceC
   }, [currentQuestion.name, fetchTranslation]);
 
   const askQuestion = useCallback(() => {
-    speak(`Where is the ${currentQuestion.name}?`);
+    speak(`Where is the ${currentQuestion.name}? Can you find it?`);
   }, [currentQuestion.name, speak]);
 
   useEffect(() => {
     askQuestion();
   }, [askQuestion]);
-
-  useEffect(() => {
-    if (!voiceCommand) return;
-    if (voiceCommand.includes('play sound') || voiceCommand.includes('repeat') || voiceCommand.includes('speak')) {
-      askQuestion();
-    }
-  }, [voiceCommand, askQuestion]);
 
   const handleAnswer = (item: LearningItem) => {
     if (feedback) return;
@@ -82,63 +74,63 @@ const QuizView: React.FC<Props> = ({ category, onComplete, onBack, speak, voiceC
     if (item.id === currentQuestion.id) {
       setScore(prev => prev + 25);
       setFeedback('correct');
-      speak("Great job!");
+      speak("Yay! You found it! Great job!");
       setTimeout(() => {
         setFeedback(null);
-        if (questionIndex < items.length - 1 && questionIndex < 4) {
+        if (questionIndex < 4 && questionIndex < items.length - 1) {
           setQuestionIndex(prev => prev + 1);
         } else {
           onComplete(score + 25);
         }
-      }, 1500);
+      }, 2000);
     } else {
       setFeedback('wrong');
-      speak("Oops, try again!");
-      setTimeout(() => setFeedback(null), 1000);
+      speak("Oh no! That's not it. Try again!");
+      setTimeout(() => setFeedback(null), 1200);
     }
   };
 
   const loading = parentIsTranslating || isLocalTranslating;
 
   return (
-    <div className="min-h-screen p-4 flex flex-col bg-sky-100">
-      <div className="flex justify-between items-center mb-8 px-2">
-        <button onClick={onBack} className="bg-white p-4 rounded-3xl shadow-[0_6px_0_#ddd] text-3xl active:translate-y-1 active:shadow-none transition-all">🔙</button>
+    <div className="min-h-screen p-4 flex flex-col bg-sky-100 overflow-hidden">
+      <div className="flex justify-between items-center mb-6 px-2 pt-2">
+        <button onClick={onBack} className="bg-white p-4 rounded-3xl shadow-[0_8px_0_#ddd] text-3xl active:translate-y-1 transition-all">🔙</button>
         <div className="text-center">
-            <h2 className="text-4xl kids-font text-blue-600 drop-shadow-sm">QUIZ!</h2>
-            {loading && <span className="text-[10px] text-orange-400 font-bold animate-pulse block">✨ Translating...</span>}
+            <h2 className="text-3xl md:text-4xl kids-font text-blue-600 drop-shadow-sm">QUIZ TIME!</h2>
+            {loading && <span className="text-xs text-orange-400 font-bold animate-pulse block">✨ Thinking...</span>}
         </div>
-        <div className="text-3xl font-bold text-orange-500 bg-white px-6 py-3 rounded-3xl shadow-[0_6px_0_#ddd] kids-font">⭐ {score}</div>
+        <div className="text-2xl md:text-3xl font-bold text-orange-500 bg-white px-6 py-3 rounded-3xl shadow-[0_8px_0_#ddd] kids-font animate-pulse-subtle">⭐ {score}</div>
       </div>
 
-      <div className="flex-grow flex flex-col items-center justify-center space-y-12">
-        <div className="bg-white p-10 rounded-[3.5rem] clay-card text-center border-4 border-dashed border-blue-200 w-full max-w-md animate-bounce-subtle">
-           <p className="text-4xl text-gray-500 mb-4 kids-font opacity-60 uppercase tracking-tighter">Find The</p>
-           <h3 className="text-7xl kids-font text-blue-600 mb-2 drop-shadow-md">
+      <div className="flex-grow flex flex-col items-center justify-center space-y-8 md:space-y-12 pb-10">
+        <div className="bg-white p-8 md:p-12 rounded-[3.5rem] clay-card text-center border-4 border-dashed border-blue-200 w-full max-w-md animate-bounce-subtle">
+           <p className="text-3xl text-gray-400 mb-4 kids-font uppercase tracking-tighter">FIND THE...</p>
+           <h3 className="text-6xl md:text-7xl kids-font text-blue-600 drop-shadow-md px-2 break-words">
              {loading ? '...' : (localTranslatedName || currentQuestion.name)}
            </h3>
         </div>
 
-        <div className="grid grid-cols-2 gap-8 w-full max-w-lg">
+        <div className="grid grid-cols-2 gap-6 md:gap-10 w-full max-w-xl px-4">
           {options.map(opt => (
             <button
               key={opt.id}
               onClick={() => handleAnswer(opt)}
-              className={`aspect-square bg-white rounded-[3rem] clay-button flex items-center justify-center text-9xl transition-all transform active:scale-90
+              className={`aspect-square bg-white rounded-[3.5rem] clay-button flex items-center justify-center text-[7rem] md:text-[9rem] transition-all transform active:scale-90
                 ${feedback === 'correct' && opt.id === currentQuestion.id ? 'bg-green-100 scale-105 shadow-[0_12px_0_#15803d]' : 'shadow-[0_12px_0_#ddd]'}
-                ${feedback === 'wrong' && opt.id !== currentQuestion.id ? 'opacity-40 grayscale blur-[1px]' : ''}
+                ${feedback === 'wrong' && opt.id !== currentQuestion.id ? 'opacity-30 grayscale blur-[2px] translate-y-2' : 'hover:scale-105'}
               `}
             >
-              <span className="drop-shadow-xl">{opt.image}</span>
+              <span className="drop-shadow-2xl">{opt.image}</span>
             </button>
           ))}
         </div>
       </div>
 
       {feedback === 'correct' && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none animate-in fade-in zoom-in">
-          <div className="bg-green-500 text-white p-12 rounded-full text-6xl font-bold shadow-2xl kids-font drop-shadow-xl">
-            🌟 BRAVO! 🌟
+        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+          <div className="bg-green-500 text-white p-16 rounded-full text-5xl md:text-7xl font-bold shadow-2xl kids-font animate-in zoom-in spin-in-12 duration-500">
+             AWESOME! 🌟
           </div>
         </div>
       )}
