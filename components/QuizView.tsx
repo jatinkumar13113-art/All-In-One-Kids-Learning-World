@@ -8,12 +8,11 @@ interface Props {
   onComplete: (score: number) => void;
   onBack: () => void;
   speak: (text: string) => void;
-  voiceCommand: string;
   language: string;
   isTranslating: boolean;
 }
 
-const QuizView: React.FC<Props> = ({ category, onComplete, onBack, speak, voiceCommand, language, isTranslating: parentIsTranslating }) => {
+const QuizView: React.FC<Props> = ({ category, onComplete, onBack, speak, language, isTranslating: parentIsTranslating }) => {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);

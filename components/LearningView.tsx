@@ -9,12 +9,11 @@ interface Props {
   onFinish: () => void;
   speak: (text: string) => void;
   playAnimalSound: (item: LearningItem) => void;
-  voiceCommand: string;
   language: string;
   isTranslating: boolean;
 }
 
-const LearningView: React.FC<Props> = ({ category, onBack, onFinish, speak, playAnimalSound, voiceCommand, language, isTranslating: parentIsTranslating }) => {
+const LearningView: React.FC<Props> = ({ category, onBack, onFinish, speak, playAnimalSound, language, isTranslating: parentIsTranslating }) => {
   const [index, setIndex] = useState(0);
   const [localTranslatedName, setLocalTranslatedName] = useState('');
   const [isLocalTranslating, setIsLocalTranslating] = useState(false);
@@ -80,18 +79,6 @@ const LearningView: React.FC<Props> = ({ category, onBack, onFinish, speak, play
   useEffect(() => {
     handleSpeak();
   }, [index, handleSpeak]);
-
-  useEffect(() => {
-    if (!voiceCommand) return;
-    const cmd = voiceCommand.toLowerCase();
-    if (cmd.includes('next') || cmd.includes('forward')) {
-      handleNext();
-    } else if (cmd.includes('previous') || cmd.includes('back')) {
-      handlePrev();
-    } else if (cmd.includes('play') || cmd.includes('speak') || cmd.includes('repeat')) {
-      handleSpeak();
-    }
-  }, [voiceCommand, handleNext, handlePrev, handleSpeak]);
 
   const loading = parentIsTranslating || isLocalTranslating;
   const isRhyme = category.id === CategoryId.RHYMES;

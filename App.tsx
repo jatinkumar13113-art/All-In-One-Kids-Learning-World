@@ -20,8 +20,6 @@ const App: React.FC = () => {
     language: 'en'
   });
   const [isLocked, setIsLocked] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [lastCommand, setLastCommand] = useState('');
   const [isTranslating, setIsTranslating] = useState(false);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
@@ -174,41 +172,6 @@ const App: React.FC = () => {
     speak("Okay! Going back!");
   }, [speak]);
 
-  useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => { 
-      setIsListening(false); 
-      setTimeout(() => {
-        try { recognition.start(); } catch(e) {}
-      }, 2000);
-    };
-
-    recognition.onresult = (event: any) => {
-      const command = event.results[event.results.length - 1][0].transcript.toLowerCase();
-      setLastCommand(command);
-      if (command.includes('go back') || command.includes('back')) handleGoBack();
-      else if (command.includes('start quiz') || command.includes('quiz')) {
-        if (stateRef.current === 'LEARNING') handleFinishLearning();
-      } else if (command.includes('play now') || command.includes('start game') || command.includes('play game')) {
-        if (stateRef.current === 'HOME') handleStart();
-      }
-    };
-
-    try { recognition.start(); } catch(e) {}
-    return () => {
-      recognition.onend = null;
-      try { recognition.stop(); } catch(e) {}
-    };
-  }, [handleGoBack, handleFinishLearning, handleStart]);
-
   const toggleLanguage = (langCode: string) => {
     setProgress(prev => ({ ...prev, language: langCode }));
     setTimeout(() => speak(`Okay! Let's learn in this language!`), 200);
@@ -248,7 +211,7 @@ const App: React.FC = () => {
             </div>
 
             <p className="mt-8 text-blue-600 font-bold animate-pulse text-lg kids-font tracking-wide">
-              {isListening ? '🎤 I am listening! Say "Play Now"!' : 'Tap Play to start!'}
+              Tap Play to start!
             </p>
             <Mascot />
           </div>
@@ -278,7 +241,6 @@ const App: React.FC = () => {
             onFinish={handleFinishLearning}
             speak={speak}
             playAnimalSound={playAnimalSound}
-            voiceCommand={lastCommand}
             language={progress.language}
             isTranslating={isTranslating}
           />
@@ -291,7 +253,6 @@ const App: React.FC = () => {
             onComplete={handleQuizComplete}
             onBack={() => setGameState('LEARNING')}
             speak={speak}
-            voiceCommand={lastCommand}
             language={progress.language}
             isTranslating={isTranslating}
           />

@@ -1,7 +1,5 @@
 {
   "name": "All In One Kids Learning World",
   "description": "A vibrant, interactive educational app for toddlers to learn alphabets, animals, fruits, shapes, and more through fun games and quizzes.",
-  "requestFramePermissions": [
-    "microphone"
-  ]
+  "requestFramePermissions": []
 }
